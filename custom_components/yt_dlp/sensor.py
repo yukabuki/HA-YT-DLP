@@ -70,4 +70,8 @@ class YtDlpStatusSensor(CoordinatorEntity[YtDlpCoordinator], SensorEntity):
         if self.coordinator.error:
             attrs["last_error"] = self.coordinator.error
 
+        if self.coordinator.video_errors:
+            attrs["video_errors"] = self.coordinator.video_errors
+            attrs["video_error_count"] = len(self.coordinator.video_errors)
+
         return attrs

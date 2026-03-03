@@ -8,6 +8,7 @@ import sys
 from datetime import datetime, timedelta
 from typing import Any
 
+from homeassistant.components.persistent_notification import async_create as pn_create
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -34,6 +35,37 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class _YtDlpLogger:
+    """Redirects yt-dlp internal messages to the HA logger.
+
+    Without this, yt-dlp writes directly to stdout/stderr when quiet=False,
+    or produces no output at all when quiet=True.  This class routes every
+    yt-dlp log line through the standard HA logging system so they appear in
+    Settings → System → Logs and in home-assistant.log.
+    """
+
+    def __init__(self, video_errors: list[str]) -> None:
+        self._video_errors = video_errors
+
+    def debug(self, msg: str) -> None:
+        _LOGGER.debug("[yt-dlp] %s", msg)
+
+    def info(self, msg: str) -> None:
+        # yt-dlp marks download progress lines as info — keep them at debug
+        # level to avoid flooding the log.
+        if msg.startswith("[download]"):
+            _LOGGER.debug("[yt-dlp] %s", msg)
+        else:
+            _LOGGER.info("[yt-dlp] %s", msg)
+
+    def warning(self, msg: str) -> None:
+        _LOGGER.warning("[yt-dlp] %s", msg)
+
+    def error(self, msg: str) -> None:
+        _LOGGER.error("[yt-dlp] %s", msg)
+        self._video_errors.append(msg)
+
+
 def _get_option(entry: ConfigEntry, key: str, default: Any = None) -> Any:
     """Read from entry.options first, fall back to entry.data."""
     return entry.options.get(key, entry.data.get(key, default))
@@ -48,6 +80,7 @@ class YtDlpCoordinator(DataUpdateCoordinator):
         self._last_run: datetime | None = None
         self._files_downloaded: int = 0
         self._error: str | None = None
+        self._video_errors: list[str] = []
         self._is_downloading: bool = False
         # Avoid a download on the very first coordinator refresh (startup).
         self._first_refresh_done: bool = False
@@ -104,12 +137,17 @@ class YtDlpCoordinator(DataUpdateCoordinator):
     def error(self) -> str | None:
         return self._error
 
+    @property
+    def video_errors(self) -> list[str]:
+        return self._video_errors
+
     def _build_state(self) -> dict[str, Any]:
         return {
             "status": self._status,
             "last_run": self._last_run,
             "files_downloaded": self._files_downloaded,
             "error": self._error,
+            "video_errors": list(self._video_errors),
         }
 
     # ------------------------------------------------------------------
@@ -135,7 +173,18 @@ class YtDlpCoordinator(DataUpdateCoordinator):
             )
             return self.data or self._build_state()
 
-        return await self.hass.async_add_executor_job(self._run_download)
+        # Set status NOW (async context) and push it to entities immediately,
+        # before the executor thread starts.  Without this the sensor would
+        # stay on "idle" for the entire duration of the download.
+        self._is_downloading = True
+        self._status = STATUS_DOWNLOADING
+        self._error = None
+        self._video_errors = []
+        self.async_update_listeners()
+
+        result = await self.hass.async_add_executor_job(self._run_download)
+        await self._async_maybe_notify(result)
+        return result
 
     # ------------------------------------------------------------------
     # Public async API
@@ -148,12 +197,56 @@ class YtDlpCoordinator(DataUpdateCoordinator):
                 "Download already in progress for '%s'", self.entry.title
             )
             return
+
+        # Same as above: set downloading state before entering the executor
+        # so the sensor reflects it immediately.
+        self._is_downloading = True
+        self._status = STATUS_DOWNLOADING
+        self._error = None
+        self._video_errors = []
+        self.async_update_listeners()
+
         result = await self.hass.async_add_executor_job(self._run_download)
         self.async_set_updated_data(result)
+        await self._async_maybe_notify(result)
 
     async def async_update_ytdlp(self) -> bool:
         """Update yt-dlp to the latest version and return True on success."""
         return await self.hass.async_add_executor_job(self._run_pip_update_standalone)
+
+    async def _async_maybe_notify(self, result: dict[str, Any]) -> None:
+        """Create a persistent HA notification when a download has errors."""
+        notif_id = f"{DOMAIN}_{self.entry.entry_id}_error"
+        fatal_error: str | None = result.get("error")
+        video_errors: list[str] = result.get("video_errors", [])
+
+        if fatal_error:
+            pn_create(
+                self.hass,
+                title=f"YT-DLP — Erreur : {self.entry.title}",
+                message=(
+                    f"Une erreur fatale s'est produite lors du téléchargement.\n\n"
+                    f"**Erreur :** {fatal_error}\n\n"
+                    f"**Playlist :** {self.playlist_url}\n\n"
+                    f"Vérifiez les logs (`Paramètres → Système → Journaux`) "
+                    f"pour plus de détails."
+                ),
+                notification_id=notif_id,
+            )
+        elif video_errors:
+            errors_text = "\n".join(f"- {e}" for e in video_errors[:10])
+            suffix = f"\n- … et {len(video_errors) - 10} autres" if len(video_errors) > 10 else ""
+            pn_create(
+                self.hass,
+                title=f"YT-DLP — Avertissements : {self.entry.title}",
+                message=(
+                    f"{result.get('files_downloaded', 0)} fichier(s) téléchargé(s), "
+                    f"mais {len(video_errors)} vidéo(s) ont rencontré une erreur :\n\n"
+                    f"{errors_text}{suffix}\n\n"
+                    f"**Playlist :** {self.playlist_url}"
+                ),
+                notification_id=notif_id,
+            )
 
     # ------------------------------------------------------------------
     # Blocking helpers (executor thread)
@@ -205,9 +298,8 @@ class YtDlpCoordinator(DataUpdateCoordinator):
             _LOGGER.error("yt-dlp not found: %s", exc)
             return self._build_state()
 
-        self._is_downloading = True
-        self._status = STATUS_DOWNLOADING
-        self._error = None
+        # Note: _is_downloading, _status, _error, _video_errors are already
+        # set by the calling async method before entering the executor.
 
         # Optional auto-update before download (no status change here).
         if self.auto_update:
@@ -231,10 +323,13 @@ class YtDlpCoordinator(DataUpdateCoordinator):
             return self._build_state()
 
         downloaded_files: list[str] = []
+        ytdlp_logger = _YtDlpLogger(self._video_errors)
 
         def _progress_hook(d: dict) -> None:
             if d.get("status") == "finished":
-                downloaded_files.append(d.get("filename", ""))
+                filename = d.get("filename", "")
+                downloaded_files.append(filename)
+                _LOGGER.info("[yt-dlp] Fichier téléchargé : %s", filename)
 
         outtmpl = os.path.join(
             self.download_path,
@@ -246,8 +341,8 @@ class YtDlpCoordinator(DataUpdateCoordinator):
             "outtmpl": outtmpl,
             "nooverwrites": not self.replace_existing,
             "ignoreerrors": True,
-            "quiet": True,
-            "no_warnings": True,
+            # Route all yt-dlp output through the HA logger instead of stdout.
+            "logger": ytdlp_logger,
             "progress_hooks": [_progress_hook],
         }
 
