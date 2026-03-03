@@ -1,0 +1,66 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure YT-DLP Downloader",
+        "description": "Add a YouTube playlist to download automatically.",
+        "data": {
+          "name": "Name",
+          "playlist_url": "YouTube Playlist URL",
+          "scan_interval": "Download interval (hours)",
+          "download_path": "Download path",
+          "format": "Format",
+          "replace_existing": "Replace existing files",
+          "auto_update": "Auto-update yt-dlp before each download"
+        },
+        "data_description": {
+          "playlist_url": "Full URL of a public YouTube playlist (e.g. https://www.youtube.com/playlist?list=…)",
+          "download_path": "Absolute path where files will be saved (e.g. /media/music)",
+          "replace_existing": "When disabled (default) already-downloaded files are skipped",
+          "auto_update": "Recommended — keeps yt-dlp current so YouTube changes don't break downloads"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Invalid URL — must start with http:// or https://",
+      "invalid_path": "Download path cannot be empty"
+    },
+    "abort": {
+      "already_configured": "This playlist is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update YT-DLP configuration",
+        "data": {
+          "playlist_url": "YouTube Playlist URL",
+          "scan_interval": "Download interval (hours)",
+          "download_path": "Download path",
+          "format": "Format",
+          "replace_existing": "Replace existing files",
+          "auto_update": "Auto-update yt-dlp before each download"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Invalid URL — must start with http:// or https://"
+    }
+  },
+  "services": {
+    "download_now": {
+      "name": "Download Playlist Now",
+      "description": "Trigger an immediate download for one or all configured playlists.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Integration Entry",
+          "description": "Which playlist to download. Leave empty to download all."
+        }
+      }
+    },
+    "update_ytdlp": {
+      "name": "Update yt-dlp",
+      "description": "Update yt-dlp to the latest version via pip."
+    }
+  }
+}

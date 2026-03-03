@@ -1,0 +1,21 @@
+download_now:
+  name: Download Playlist Now
+  description: >
+    Trigger an immediate download for one or all configured playlists.
+    If no config_entry_id is provided, all configured playlists are downloaded.
+  fields:
+    config_entry_id:
+      name: Integration Entry
+      description: >
+        Select which playlist integration to download.
+        Leave empty to download all configured playlists.
+      required: false
+      selector:
+        config_entry:
+          integration: yt_dlp
+
+update_ytdlp:
+  name: Update yt-dlp
+  description: >
+    Update yt-dlp to the latest version via pip.
+    The updated version is used immediately for the next download.

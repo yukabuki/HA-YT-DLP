@@ -1,0 +1,66 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurer YT-DLP Downloader",
+        "description": "Ajoutez une playlist YouTube à télécharger automatiquement.",
+        "data": {
+          "name": "Nom",
+          "playlist_url": "URL de la playlist YouTube",
+          "scan_interval": "Intervalle de téléchargement (heures)",
+          "download_path": "Chemin de téléchargement",
+          "format": "Format",
+          "replace_existing": "Remplacer les fichiers existants",
+          "auto_update": "Mettre à jour yt-dlp avant chaque téléchargement"
+        },
+        "data_description": {
+          "playlist_url": "URL complète d'une playlist YouTube publique (ex. https://www.youtube.com/playlist?list=…)",
+          "download_path": "Chemin absolu où les fichiers seront enregistrés (ex. /media/musique)",
+          "replace_existing": "Désactivé par défaut — les fichiers déjà téléchargés sont ignorés",
+          "auto_update": "Recommandé — maintient yt-dlp à jour pour éviter les problèmes liés aux changements de YouTube"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "URL invalide — doit commencer par http:// ou https://",
+      "invalid_path": "Le chemin de téléchargement ne peut pas être vide"
+    },
+    "abort": {
+      "already_configured": "Cette playlist est déjà configurée"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Modifier la configuration YT-DLP",
+        "data": {
+          "playlist_url": "URL de la playlist YouTube",
+          "scan_interval": "Intervalle de téléchargement (heures)",
+          "download_path": "Chemin de téléchargement",
+          "format": "Format",
+          "replace_existing": "Remplacer les fichiers existants",
+          "auto_update": "Mettre à jour yt-dlp avant chaque téléchargement"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "URL invalide — doit commencer par http:// ou https://"
+    }
+  },
+  "services": {
+    "download_now": {
+      "name": "Télécharger la playlist maintenant",
+      "description": "Déclenche un téléchargement immédiat pour une ou toutes les playlists configurées.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Entrée d'intégration",
+          "description": "Quelle playlist télécharger. Laisser vide pour tout télécharger."
+        }
+      }
+    },
+    "update_ytdlp": {
+      "name": "Mettre à jour yt-dlp",
+      "description": "Met à jour yt-dlp vers la dernière version via pip."
+    }
+  }
+}

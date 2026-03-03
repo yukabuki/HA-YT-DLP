@@ -1,0 +1,11 @@
+{
+  "domain": "yt_dlp",
+  "name": "YT-DLP Downloader",
+  "version": "1.0.0",
+  "config_flow": true,
+  "documentation": "https://github.com/yukabuki/ha-yt-dlp",
+  "issue_tracker": "https://github.com/yukabuki/ha-yt-dlp/issues",
+  "requirements": ["yt-dlp>=2024.1.1"],
+  "iot_class": "cloud_polling",
+  "codeowners": ["@yukabuki"]
+}
